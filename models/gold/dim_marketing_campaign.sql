@@ -5,8 +5,9 @@
 WITH campaigns AS (
 
     SELECT
-
         campaign_id,
+        campaign_name,
+        campaign_type,
         target_audience_segmentation,
         budget,
         campaign_duration_days,
@@ -22,45 +23,20 @@ final AS (
 
     SELECT
 
-        /*
-           SURROGATE KEY
-
-           Generated from the natural Campaign ID
-           using dbt_utils.
-        */
-
         {{ dbt_utils.generate_surrogate_key([
             'campaign_id'
         ]) }} AS campaign_key,
 
-
-        /*
-           NATURAL KEY
-        */
-
         campaign_id,
 
+        campaign_name,
 
-        /*
-           TARGET AUDIENCE
-        */
+        campaign_type,
 
         target_audience_segmentation
             AS target_audience_segment,
 
-
-        /*
-           CAMPAIGN BUDGET
-        */
-
         budget,
-
-
-        /*
-           CAMPAIGN DURATION
-
-           Number of days between start and end dates.
-        */
 
         campaign_duration_days
             AS duration,

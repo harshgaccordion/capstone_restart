@@ -3,130 +3,112 @@
     schema = 'reporting'
 ) }}
 
-WITH inventory AS (
+WITH inventory_records AS (
 
     SELECT
-
         inventory_key,
         product_key,
         date_key,
         store_key,
         supplier_key,
-
         beginning_stock,
         purchased_quantity,
         sold_quantity,
         ending_stock,
-
         inventory_value,
-
         snapshot_gap_flag,
         snapshot_gap_days
-
     FROM {{ ref('fact_inventory') }}
 
 ),
 
-suppliers AS (
+supplier_details AS (
 
     SELECT
-
         supplier_key,
         supplier_id,
         supplier_name,
         supplier_type
-
     FROM {{ ref('dim_supplier') }}
 
 ),
 
-stores AS (
+store_details AS (
 
     SELECT
-
         store_key,
         store_id,
         store_name,
         region,
         store_type
-
     FROM {{ ref('dim_stores') }}
 
 ),
 
-dates AS (
+calendar AS (
 
     SELECT
-
         date_key,
         full_date,
         year,
         month,
         quarter
-
     FROM {{ ref('dim_date') }}
 
 ),
 
-classified AS (
+enriched_inventory AS (
 
     SELECT
+        inv.inventory_key,
+        inv.product_key,
+        inv.date_key,
+        inv.store_key,
+        inv.supplier_key,
 
-        i.inventory_key,
+        cal.full_date,
+        cal.year,
+        cal.month,
+        cal.quarter,
 
-        i.product_key,
-        i.date_key,
-        i.store_key,
-        i.supplier_key,
+        sup.supplier_id,
+        sup.supplier_name,
+        sup.supplier_type,
 
-        d.full_date,
+        str.store_id,
+        str.store_name,
+        str.region,
+        str.store_type,
 
-        d.year,
-        d.month,
-        d.quarter,
+        inv.beginning_stock,
+        inv.purchased_quantity,
+        inv.sold_quantity,
+        inv.ending_stock,
+        inv.inventory_value,
 
-        s.supplier_id,
-        s.supplier_name,
-        s.supplier_type,
+        inv.snapshot_gap_flag,
+        inv.snapshot_gap_days,
 
-        st.store_id,
-        st.store_name,
-        st.region,
-        st.store_type,
+        IFF(
+            COALESCE(inv.snapshot_gap_flag, FALSE),
+            'Delayed',
+            'On Time'
+        ) AS supply_status
 
-        i.beginning_stock,
-        i.purchased_quantity,
-        i.sold_quantity,
-        i.ending_stock,
-        i.inventory_value,
+    FROM inventory_records inv
 
-        i.snapshot_gap_flag,
-        i.snapshot_gap_days,
+    LEFT JOIN supplier_details sup
+        ON sup.supplier_key = inv.supplier_key
 
-        CASE
+    LEFT JOIN store_details str
+        ON str.store_key = inv.store_key
 
-            WHEN COALESCE(i.snapshot_gap_flag, FALSE) = TRUE
-                THEN 'Delayed'
-
-            ELSE 'On Time'
-
-        END AS supply_status
-
-    FROM inventory i
-
-    LEFT JOIN suppliers s
-        ON i.supplier_key = s.supplier_key
-
-    LEFT JOIN stores st
-        ON i.store_key = st.store_key
-
-    LEFT JOIN dates d
-        ON i.date_key = d.date_key
+    LEFT JOIN calendar cal
+        ON cal.date_key = inv.date_key
 
 )
 
 SELECT
-
     supplier_key,
     supplier_id,
     supplier_name,
@@ -146,45 +128,42 @@ SELECT
 
     supply_status,
 
-    COUNT(DISTINCT inventory_key)
-        AS inventory_snapshot_count,
+    COUNT(DISTINCT inventory_key) AS inventory_snapshot_count,
 
-    SUM(purchased_quantity)
-        AS total_purchased_quantity,
+    SUM(purchased_quantity) AS total_purchased_quantity,
 
-    SUM(sold_quantity)
-        AS total_sold_quantity,
+    SUM(sold_quantity) AS total_sold_quantity,
 
-    SUM(ending_stock)
-        AS total_ending_inventory,
+    SUM(ending_stock) AS total_ending_inventory,
 
-    SUM(inventory_value)
-        AS total_inventory_value,
+    SUM(inventory_value) AS total_inventory_value,
 
-    AVG(snapshot_gap_days)
-        AS average_snapshot_gap_days,
+    AVG(snapshot_gap_days) AS average_snapshot_gap_days,
 
     COUNT(
-        DISTINCT CASE
-            WHEN supply_status = 'On Time'
-            THEN inventory_key
-        END
+        DISTINCT IFF(
+            supply_status = 'On Time',
+            inventory_key,
+            NULL
+        )
     ) AS on_time_snapshot_count,
 
     COUNT(
-        DISTINCT CASE
-            WHEN supply_status = 'Delayed'
-            THEN inventory_key
-        END
+        DISTINCT IFF(
+            supply_status = 'Delayed',
+            inventory_key,
+            NULL
+        )
     ) AS delayed_snapshot_count,
 
     ROUND(
         100.0
         * COUNT(
-            DISTINCT CASE
-                WHEN supply_status = 'On Time'
-                THEN inventory_key
-            END
+            DISTINCT IFF(
+                supply_status = 'On Time',
+                inventory_key,
+                NULL
+            )
         )
         / NULLIF(
             COUNT(DISTINCT inventory_key),
@@ -196,10 +175,11 @@ SELECT
     ROUND(
         100.0
         * COUNT(
-            DISTINCT CASE
-                WHEN supply_status = 'Delayed'
-                THEN inventory_key
-            END
+            DISTINCT IFF(
+                supply_status = 'Delayed',
+                inventory_key,
+                NULL
+            )
         )
         / NULLIF(
             COUNT(DISTINCT inventory_key),
@@ -208,25 +188,21 @@ SELECT
         2
     ) AS delayed_percentage
 
-FROM classified
+FROM enriched_inventory
 
 GROUP BY
-
     supplier_key,
     supplier_id,
     supplier_name,
     supplier_type,
-
     store_key,
     store_id,
     store_name,
     region,
     store_type,
-
     date_key,
     full_date,
     year,
     month,
     quarter,
-
     supply_status

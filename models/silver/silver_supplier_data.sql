@@ -10,15 +10,12 @@ WITH source_data AS (
         RAW_DATA,
         LOADED_AT,
         BATCH_ID
+
     FROM {{ ref('stg_bronze__supplier_data') }}
 
 ),
 
-/*
-   1. FLATTEN THE SUPPLIERS ARRAY
-*/
-
-flattened AS (
+flattened_suppliers AS (
 
     SELECT
         s.SOURCE_FILE,
@@ -36,27 +33,14 @@ flattened AS (
 
 ),
 
-/*
-   2. EXTRACT + CLEAN + STANDARDIZE
-*/
-
-cleaned AS (
+cleaned_suppliers AS (
 
     SELECT
-
-        /*
-           AUDIT / LINEAGE METADATA
-        */
 
         SOURCE_FILE,
         ROW_NUMBER,
         LOADED_AT,
         BATCH_ID,
-
-
-        /*
-           SUPPLIER ID
-        */
 
         NULLIF(
             TRIM(
@@ -64,11 +48,6 @@ cleaned AS (
             ),
             ''
         ) AS supplier_id,
-
-
-        /*
-           SUPPLIER NAME
-        */
 
         INITCAP(
             REGEXP_REPLACE(
@@ -80,14 +59,6 @@ cleaned AS (
             )
         ) AS supplier_name,
 
-
-        /*
-           CONTACT PERSON
-
-           Actual JSON path:
-           contact_information.contact_person
-        */
-
         INITCAP(
             REGEXP_REPLACE(
                 TRIM(
@@ -98,63 +69,41 @@ cleaned AS (
             )
         ) AS contact_name,
 
-
-        /*
-           EMAIL
-
-           Actual JSON path:
-           contact_information.email
-
-           Invalid email becomes NULL.
-        */
-
         CASE
+
             WHEN REGEXP_LIKE(
-                LOWER(
-                    TRIM(
-                        supplier_data:contact_information:email::VARCHAR
-                    )
+                TRIM(
+                    supplier_data:contact_information:email::VARCHAR
                 ),
                 '^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$',
                 'i'
             )
+
             THEN LOWER(
                 TRIM(
                     supplier_data:contact_information:email::VARCHAR
                 )
             )
+
             ELSE NULL
+
         END AS email,
 
-
-        /*
-           INVALID EMAIL FLAG
-        */
-
         CASE
+
             WHEN REGEXP_LIKE(
-                LOWER(
-                    TRIM(
-                        supplier_data:contact_information:email::VARCHAR
-                    )
+                TRIM(
+                    supplier_data:contact_information:email::VARCHAR
                 ),
                 '^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$',
                 'i'
             )
+
             THEN FALSE
+
             ELSE TRUE
+
         END AS invalid_email_flag,
-
-
-        /*
-           PHONE
-
-           Actual JSON path:
-           contact_information.phone
-
-           Standard US format:
-           (XXX) XXX-XXXX
-        */
 
         CASE
 
@@ -271,11 +220,6 @@ cleaned AS (
 
         END AS phone,
 
-
-        /*
-           INVALID PHONE FLAG
-        */
-
         CASE
 
             WHEN LENGTH(
@@ -317,32 +261,9 @@ cleaned AS (
 
         END AS invalid_phone_flag,
 
-
-        /*
-           RAW ADDRESS
-
-           Actual JSON path:
-           contact_information.address
-        */
-
         TRIM(
             supplier_data:contact_information:address::VARCHAR
         ) AS raw_address,
-
-
-        /*
-           STREET
-
-           Address format:
-           street, city, state, zip, country
-
-           Example:
-           808 James Fort,
-           West Kristine,
-           KY,
-           41934,
-           USA
-        */
 
         TRIM(
             SPLIT_PART(
@@ -351,11 +272,6 @@ cleaned AS (
                 1
             )
         ) AS street,
-
-
-        /*
-           CITY
-        */
 
         INITCAP(
             TRIM(
@@ -367,11 +283,6 @@ cleaned AS (
             )
         ) AS city,
 
-
-        /*
-           STATE
-        */
-
         UPPER(
             TRIM(
                 SPLIT_PART(
@@ -382,12 +293,8 @@ cleaned AS (
             )
         ) AS state,
 
-
-        /*
-           POSTAL CODE
-        */
-
         CASE
+
             WHEN REGEXP_LIKE(
                 TRIM(
                     SPLIT_PART(
@@ -398,6 +305,7 @@ cleaned AS (
                 ),
                 '^[0-9]{5}(-[0-9]{4})?$'
             )
+
             THEN TRIM(
                 SPLIT_PART(
                     supplier_data:contact_information:address::VARCHAR,
@@ -405,15 +313,13 @@ cleaned AS (
                     4
                 )
             )
+
             ELSE NULL
+
         END AS postal_code,
 
-
-        /*
-           INVALID POSTAL CODE FLAG
-        */
-
         CASE
+
             WHEN REGEXP_LIKE(
                 TRIM(
                     SPLIT_PART(
@@ -424,14 +330,12 @@ cleaned AS (
                 ),
                 '^[0-9]{5}(-[0-9]{4})?$'
             )
+
             THEN FALSE
+
             ELSE TRUE
+
         END AS invalid_postal_code_flag,
-
-
-        /*
-           COUNTRY
-        */
 
         UPPER(
             TRIM(
@@ -442,11 +346,6 @@ cleaned AS (
                 )
             )
         ) AS country,
-
-
-        /*
-           STANDARDIZED ADDRESS
-        */
 
         CONCAT_WS(
             ', ',
@@ -514,21 +413,11 @@ cleaned AS (
 
         ) AS standardized_address,
 
-
-        /*
-           PAYMENT TERMS
-        */
-
         INITCAP(
             TRIM(
                 supplier_data:payment_terms::VARCHAR
             )
         ) AS payment_terms,
-
-
-        /*
-           SUPPLIER TYPE
-        */
 
         INITCAP(
             REGEXP_REPLACE(
@@ -540,11 +429,6 @@ cleaned AS (
             )
         ) AS supplier_type,
 
-
-        /*
-           LAST MODIFIED DATE
-        */
-
         TRY_TO_TIMESTAMP_NTZ(
             NULLIF(
                 TRIM(
@@ -554,30 +438,24 @@ cleaned AS (
             )
         ) AS last_modified_date
 
-    FROM flattened
+    FROM flattened_suppliers
 
 ),
 
-/*
-   3. DEDUPLICATION
-
-   Natural key = supplier_id
-
-   Keep the most recently modified version.
-*/
-
-deduplicated AS (
+deduplicated_suppliers AS (
 
     SELECT *
 
-    FROM cleaned
+    FROM cleaned_suppliers
 
     QUALIFY ROW_NUMBER() OVER (
 
         PARTITION BY
 
             CASE
+
                 WHEN supplier_id IS NOT NULL
+
                     THEN supplier_id
 
                 ELSE CONCAT(
@@ -586,9 +464,11 @@ deduplicated AS (
                     '_',
                     ROW_NUMBER
                 )
+
             END
 
         ORDER BY
+
             last_modified_date DESC NULLS LAST,
             LOADED_AT DESC,
             SOURCE_FILE DESC,
@@ -598,10 +478,6 @@ deduplicated AS (
 
 )
 
-/*
-   FINAL SILVER SUPPLIER TABLE
-*/
-
 SELECT *
 
-FROM deduplicated
+FROM deduplicated_suppliers
