@@ -44,6 +44,11 @@ models:
     silver:
       +schema: silver
     
-
     gold:
       +schema: gold
+
+    reporting:
+      +schema: reporting
+
+    elementary:
+      +schema: elementary
