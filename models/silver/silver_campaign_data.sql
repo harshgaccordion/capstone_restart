@@ -9,7 +9,7 @@ with
             raw_data,
             loaded_at,
             batch_id
-        from {{ ref("stg_bronze__campaign_data") }}
+        from {{ ref("stg_bronze__campaign_data") }}  
 
     ),
 

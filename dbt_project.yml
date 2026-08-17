@@ -50,5 +50,5 @@ models:
     reporting:
       +schema: reporting
 
-    elementary:
-      +schema: elementary
+  elementary:
+    +schema: elementary

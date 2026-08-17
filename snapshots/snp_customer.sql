@@ -23,7 +23,8 @@ WITH flattened AS (
 
         cust.SOURCE_FILE,
         cust.LOADED_AT,
-        cust.BATCH_ID
+        cust.BATCH_ID,
+        cust.ROW_NUMBER,
 
     FROM {{ ref('stg_bronze__customer_data') }} AS cust,
 
@@ -41,7 +42,8 @@ latest_customer AS (
         raw_customer_data,
         SOURCE_FILE,
         LOADED_AT,
-        BATCH_ID
+        BATCH_ID,
+        ROW_NUMBER
 
     FROM flattened
 
@@ -61,7 +63,8 @@ SELECT
     raw_customer_data,
     SOURCE_FILE,
     LOADED_AT,
-    BATCH_ID
+    BATCH_ID,
+    ROW_NUMBER
 
 FROM latest_customer
 

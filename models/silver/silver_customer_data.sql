@@ -7,16 +7,12 @@ WITH source_data AS (
     SELECT
         SOURCE_FILE,
         ROW_NUMBER,
-        RAW_DATA,
+        RAW_customer_DATA,
         LOADED_AT,
         BATCH_ID
-    FROM {{ ref('stg_bronze__customer_data') }}
+    FROM {{ ref('snp_customer') }}
  
 ),
- 
-/*
-   1. FLATTEN THE CUSTOMERS ARRAY
-*/
  
 flattened AS (
  
@@ -31,45 +27,27 @@ flattened AS (
     FROM source_data s,
  
     LATERAL FLATTEN(
-        INPUT => s.RAW_DATA:customers_data
+        INPUT => s.RAW_customer_DATA:customers_data
     ) customer
  
 ),
- 
-/*
-   2. EXTRACT + CLEAN + STANDARDIZE
- */
+
  
 cleaned AS (
  
     SELECT
  
-        /*
-           AUDIT / LINEAGE METADATA
-        */
- 
         SOURCE_FILE,
         ROW_NUMBER,
         LOADED_AT,
         BATCH_ID,
- 
- 
-        /*
-           CUSTOMER ID
-        */
+
  
         NULLIF(
             TRIM(customer_data:customer_id::VARCHAR),
             ''
         ) AS customer_id,
- 
- 
-        /*
-           NAME
-           Trim whitespace
-           Remove unwanted characters
-           Standardize capitalization
-        */
+
  
         INITCAP(
             REGEXP_REPLACE(
@@ -86,12 +64,6 @@ cleaned AS (
                 ''
             )
         ) AS last_name,
- 
- 
-        /*
-           EMAIL
-           Validate + normalize
-        */
  
         CASE
             WHEN REGEXP_LIKE(
@@ -112,17 +84,6 @@ cleaned AS (
             THEN FALSE
             ELSE TRUE
         END AS invalid_email_flag,
- 
- 
-        /*
-           PHONE
-           Normalize to US format:
-           (XXX) XXX-XXXX
-
-           Supports:
-           10-digit numbers
-           11-digit numbers beginning with 1
-        */
  
         CASE
  
@@ -221,15 +182,6 @@ cleaned AS (
  
         END AS phone,
  
- 
-        /*
-           INVALID PHONE FLAG
-           
-           Valid:
-           10 digits
-           11 digits beginning with 1
-        */
- 
         CASE
  
             WHEN LENGTH(
@@ -264,12 +216,7 @@ cleaned AS (
             ELSE TRUE
  
         END AS invalid_phone_flag,
- 
- 
-        /*
-           ADDRESS
-           Standardize individual components
-        */
+
  
         INITCAP(
             TRIM(customer_data:address:street::VARCHAR)
@@ -290,11 +237,6 @@ cleaned AS (
         TRIM(
             customer_data:address:zip_code::VARCHAR
         ) AS zip_code,
- 
- 
-        /*
-           STANDARDIZED ADDRESS
-        */
  
         CONCAT_WS(
             ', ',
@@ -320,11 +262,6 @@ cleaned AS (
             )
         ) AS standardized_address,
  
- 
-        /*
-           CUSTOMER ATTRIBUTES
-        */
- 
         UPPER(
             TRIM(customer_data:income_bracket::VARCHAR)
         ) AS income_bracket,
@@ -349,13 +286,7 @@ cleaned AS (
             customer_data:marketing_opt_in::BOOLEAN,
             FALSE
         ) AS marketing_opt_in,
- 
- 
-        /*
-           DATES
-           Standardized to DATE
-        */
- 
+
         TRY_TO_DATE(
             NULLIF(
                 TRIM(customer_data:birth_date::VARCHAR),
@@ -384,11 +315,6 @@ cleaned AS (
             )
         ) AS last_modified_date,
  
- 
-        /*
-           NUMERIC VALUES
-        */
- 
         COALESCE(
             TRY_TO_NUMBER(
                 customer_data:total_purchases::VARCHAR
@@ -409,21 +335,12 @@ cleaned AS (
  
 ),
  
-/*
-   3. CUSTOMER-SPECIFIC DERIVED ATTRIBUTES
-*/
- 
 derived AS (
  
     SELECT
  
         c.*,
- 
- 
-        /*
-           FULL NAME
-           FirstName || ' ' || LastName
-        */
+
  
         TRIM(
             CONCAT_WS(
@@ -432,11 +349,6 @@ derived AS (
                 NULLIF(c.last_name, '')
             )
         ) AS full_name,
- 
- 
-        /*
-           CUSTOMER AGE
-        */
  
         CASE
             WHEN c.birth_date IS NOT NULL
@@ -452,13 +364,6 @@ derived AS (
  
 ),
  
-/*
-   4. CUSTOMER SEGMENT
-   Required non-overlapping bands:
-      Young       = 18-35
-      Middle-aged = 36-55
-      Senior      = 56+
-*/
  
 segmented AS (
  
@@ -482,15 +387,7 @@ segmented AS (
     FROM derived d
  
 ),
- 
-/*
-   5. DEDUPLICATION
-   Natural key = customer_id
- 
-   Keep the most recently modified version.
- 
-   Metadata is used as deterministic tie-breakers.
-*/
+
  
 deduplicated AS (
  
@@ -521,10 +418,6 @@ deduplicated AS (
     ) = 1
  
 )
- 
-/*
-   FINAL SILVER CUSTOMER TABLE
-*/
  
 SELECT *
 FROM deduplicated
