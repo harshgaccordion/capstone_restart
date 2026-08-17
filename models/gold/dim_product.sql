@@ -34,28 +34,11 @@ final AS (
 
     SELECT
 
-        /*
-           SURROGATE KEY
-
-           Generated using dbt_utils from the
-           natural Product ID.
-        */
-
         {{ dbt_utils.generate_surrogate_key([
             'p.product_id'
         ]) }} AS product_key,
 
-
-        /*
-           NATURAL KEY
-        */
-
         p.product_id,
-
-
-        /*
-           PRODUCT ATTRIBUTES
-        */
 
         p.product_name,
         p.category,
@@ -64,18 +47,8 @@ final AS (
         p.color,
         p.size,
 
-
-        /*
-           FINANCIAL ATTRIBUTES
-        */
-
         p.unit_price,
         p.cost_price,
-
-
-        /*
-           SUPPLIER INFORMATION
-        */
 
         p.supplier_id,
         s.supplier_name

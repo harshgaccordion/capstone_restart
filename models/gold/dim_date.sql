@@ -25,22 +25,17 @@ date_attributes AS (
 
         DATE_DAY AS full_date,
 
-
-
         YEAR(DATE_DAY) AS year,
 
         QUARTER(DATE_DAY) AS quarter,
 
         MONTH(DATE_DAY) AS month,
 
-
         WEEK(DATE_DAY) AS week,
 
         DAYOFWEEK(DATE_DAY) AS day_of_week,
 
-
         DAYNAME(DATE_DAY) AS day_name,
-
 
         CASE
 

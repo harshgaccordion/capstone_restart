@@ -1,48 +1,93 @@
 {{ config(
-    materialized='view',
-    schema='reporting'
+    materialized = 'view',
+    schema = 'reporting'
 ) }}
 
+WITH inventory_base AS (
+
+    SELECT
+        date_key,
+        product_key,
+        store_key,
+        supplier_key,
+        ending_stock,
+        inventory_value
+    FROM {{ ref('fact_inventory') }}
+
+),
+
+date_lookup AS (
+
+    SELECT
+        date_key,
+        full_date
+    FROM {{ ref('dim_date') }}
+
+),
+
+product_lookup AS (
+
+    SELECT
+        product_key,
+        product_id,
+        product_name,
+        category,
+        subcategory
+    FROM {{ ref('dim_product') }}
+
+),
+
+store_lookup AS (
+
+    SELECT
+        store_key,
+        store_id,
+        store_name
+    FROM {{ ref('dim_stores') }}
+
+),
+
+supplier_lookup AS (
+
+    SELECT
+        supplier_key,
+        supplier_id,
+        supplier_name
+    FROM {{ ref('dim_supplier') }}
+
+)
+
 SELECT
+    inv.date_key,
+    dt.full_date,
 
-    fi.date_key,
-    dd.full_date,
+    inv.product_key,
+    prod.product_id,
+    prod.product_name,
+    prod.category,
+    prod.subcategory,
 
-    fi.product_key,
-    dp.product_id,
-    dp.product_name,
-    dp.category,
-    dp.subcategory,
+    inv.store_key,
+    st.store_id,
+    st.store_name,
 
-    fi.store_key,
-    ds.store_id,
-    ds.store_name,
+    inv.supplier_key,
+    sup.supplier_id,
+    sup.supplier_name,
 
-    fi.supplier_key,
-    dsp.supplier_id,
-    dsp.supplier_name,
+    inv.ending_stock,
+    inv.inventory_value
 
-    fi.ending_stock,
-    fi.inventory_value
+FROM inventory_base AS inv
 
-FROM {{ ref('fact_inventory') }} fi
+LEFT JOIN date_lookup AS dt
+    ON dt.date_key = inv.date_key
 
-LEFT JOIN {{ ref('dim_date') }} dd
+LEFT JOIN product_lookup AS prod
+    ON prod.product_key = inv.product_key
 
-    ON fi.date_key =
-       dd.date_key
+LEFT JOIN store_lookup AS st
+    ON st.store_key = inv.store_key
 
-LEFT JOIN {{ ref('dim_product') }} dp
-
-    ON fi.product_key =
-       dp.product_key
-
-LEFT JOIN {{ ref('dim_stores') }} ds
-
-    ON fi.store_key =
-       ds.store_key
-
-LEFT JOIN {{ ref('dim_supplier') }} dsp
-
-    ON fi.supplier_key =
-       dsp.supplier_key
+LEFT JOIN supplier_lookup AS sup
+    ON sup.supplier_key = inv.supplier_key

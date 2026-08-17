@@ -1,11 +1,10 @@
 {{ config(
-    materialized='view',
-    schema='reporting'
+    materialized='view'
 ) }}
 
 SELECT
 
-    dmc.target_audience_segment AS campaign_type,
+    dmc.campaign_type,
 
     COUNT(
         DISTINCT fmp.campaign_key
@@ -24,7 +23,6 @@ SELECT
     ) AS average_roi,
 
     CASE
-
         WHEN SUM(
             fmp.total_campaign_cost
         ) > 0
@@ -46,7 +44,6 @@ SELECT
             * 100
 
         ELSE NULL
-
     END AS calculated_roi
 
 FROM {{ ref('fact_marketing_performance') }} fmp
@@ -58,4 +55,4 @@ LEFT JOIN {{ ref('dim_marketing_campaign') }} dmc
 
 GROUP BY
 
-    dmc.target_audience_segment
+    dmc.campaign_type

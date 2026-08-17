@@ -5,7 +5,6 @@
 WITH stores AS (
 
     SELECT
-
         store_id,
         store_name,
         standardized_address,
