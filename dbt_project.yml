@@ -39,16 +39,21 @@ models:
   my_new_project:
     staging:
       bronze:
-        +schema: bronze
+        +schema: "{{ env_var('DBT_BRONZE_SCHEMA') }}"
 
     silver:
-      +schema: silver
+      +schema: "{{ env_var('DBT_SILVER_SCHEMA') }}"
     
     gold:
-      +schema: gold
+      +schema: "{{ env_var('DBT_GOLD_SCHEMA') }}"
 
     reporting:
-      +schema: reporting
+      +schema: "{{ env_var('DBT_REPORTING_SCHEMA') }}"
+
+    snapshot:
+      +schema: "{{ env_var('DBT_SNAPSHOT_SCHEMA') }}"
 
   elementary:
     +schema: elementary
+
+
